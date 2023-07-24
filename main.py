@@ -1,6 +1,8 @@
 """
 This code draws strong inspiration and borrows heavily from the implementation available at https://github.com/karpathy/nanoGPT.
 """
+import wandb
+wandb.init(project="shakespeare-language-model", name="GPT3.5")
 
 import torch
 import torch.nn as nn
@@ -27,6 +29,23 @@ n_layer = 3
 n_hidden_layers = 1
 dropout = 0.2
 hidden_size = block_size
+
+
+# Define the hyperparameters
+config = wandb.config
+config.batch_size = batch_size
+config.block_size = block_size
+config.max_iters = max_iters
+config.eval_interval = eval_interval
+config.learning_rate = learning_rate
+config.device = device
+config.eval_iters = eval_iters
+config.n_embd = n_embd
+config.n_head = n_head
+config.n_layer = n_layer
+config.n_hidden_layers = n_hidden_layers
+config.dropout = dropout
+config.hidden_size = config.block_size
 
 # To download the tinyshakespeare run the following line in terminal
 # wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
@@ -286,9 +305,9 @@ mlp_attention_train_loss = []
 mlp_attention_val_loss = []
 x_val = []
 
-for iter in range(max_iters):
+for iter in range(config.max_iters):
     # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0 or iter == max_iters - 1:
+    if iter % config.eval_interval == 0 or iter == config.max_iters - 1:
         x_val.append(iter)
         losses = estimate_loss(model=model)
         train_loss.append(losses["train"])
@@ -302,6 +321,9 @@ for iter in range(max_iters):
         print(
             f"MLP Attention model: step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
+
+        # Log the current loss values to W&B
+        wandb.log({"train_loss": losses["train"], "val_loss": losses["val"]})
 
     # sample a batch of data
     xb, yb = get_batch("train")
@@ -317,37 +339,17 @@ for iter in range(max_iters):
     mlp_attention_loss.backward()
     mlp_attention_optimizer.step()
 
+    # Log the current loss value to W&B
+    wandb.log({"loss": loss.item()})
 
-hyper_params = {
-    "batch_size": batch_size,  # how many independent sequences will we process in parallel?
-    "block_size": block_size,  # what is the maximum context length for predictions?
-    "max_iters": max_iters,
-    "eval_interval": eval_interval,
-    "learning_rate": learning_rate,
-    "eval_iters": eval_iters,
-    "n_embd": n_embd,
-    "n_head": n_head,
-    "n_layer": n_layer,
-    "dropout": dropout,
-    "n_hidden_layers": n_hidden_layers,
-    "hidden_size": block_size,
-    "original_params_million": original_params,
-    "mlp_attention_params_million": mlp_attention_params,
-    "train_loss": [val.tolist() for val in train_loss],
-    "val_loss": [val.tolist() for val in val_loss],
-    "mlp_attention_train_loss": [val.tolist() for val in mlp_attention_train_loss],
-    "mlp_attention_val_loss": [val.tolist() for val in mlp_attention_val_loss],
-    "epochs": x_val,
-}
-with open(f"{result_path}/hyper_params.json", "w") as outfile:
-    json.dump(hyper_params, outfile, indent=4)
+# Store the final model and hyperparameters in W&B
+wandb.save("model.pt")
+wandb.config.update(config)
+
+# Store the losses in W&B as well
+wandb.log({"train_losses": train_loss, "val_losses": val_loss, "mlp_attention_train_losses": mlp_attention_train_loss, "mlp_attention_val_losses": mlp_attention_val_loss})
 
 
-with open(f"{result_path}/losses.npy", "wb") as f:
-    np.save(f, np.array(train_loss))
-    np.save(f, np.array(val_loss))
-    np.save(f, np.array(mlp_attention_train_loss))
-    np.save(f, np.array(mlp_attention_val_loss))
 
 
 plt.plot(x_val[1:], train_loss[1:], label="Training Loss")
