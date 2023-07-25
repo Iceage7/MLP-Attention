@@ -9,24 +9,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
+import wandb
 
 experiment_name = "Final"
 result_path = f"results/{experiment_name}"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
-batch_size = 64  # how many independent sequences will we process in parallel?
-block_size = 256  # what is the maximum context length for predictions?
-max_iters = 1000
-eval_interval = 50
-learning_rate = 0.0003
+
+# Define hyperparameters as a dictionary
+config = {
+    "batch_size": 64,
+    "block_size": 256,
+    "max_iters": 1000,
+    "eval_interval": 50,
+    "learning_rate": 0.0003,
+    "n_embd": 384,
+    "n_head": 3,
+    "n_layer": 3,
+    "n_hidden_layers": 1,
+    "dropout": 0.2,
+    "hidden_size": 256
+}
+
+# Initialize Weights and Biases
+wandb.init(project="my-project", name="my-experiment", config=config)
+
+batch_size = wandb.config.batch_size
+block_size = wandb.config.block_size
+max_iters = wandb.config.max_iters
+eval_interval = wandb.config.eval_interval
+learning_rate = wandb.config.learning_rate
+n_embd = wandb.config.n_embd
+n_head = wandb.config.n_head
+n_layer = wandb.config.n_layer
+n_hidden_layers = wandb.config.n_hidden_layers
+dropout = wandb.config.dropout
+hidden_size = wandb.config.hidden_size
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 eval_iters = 200
-n_embd = 384
-n_head = 3
-n_layer = 3
-n_hidden_layers = 1
-dropout = 0.2
-hidden_size = block_size
 
 # To download the tinyshakespeare run the following line in terminal
 # wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
@@ -303,6 +324,13 @@ for iter in range(max_iters):
             f"MLP Attention model: step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
 
+
+        # Log trainig loss values 
+        wandb.log({"train": train_loss[-1], "mlp_train": mlp_attention_train_loss[-1]}, step=iter)  
+
+        # Log validation losses
+        wandb.log({"val": val_loss[-1], "mlp_val": mlp_attention_val_loss[-1]}, step=iter)
+
     # sample a batch of data
     xb, yb = get_batch("train")
 
@@ -361,3 +389,4 @@ plt.ylabel("Loss")
 plt.legend(loc="best")
 plt.savefig(f"{result_path}/losses.png")
 plt.show()
+
