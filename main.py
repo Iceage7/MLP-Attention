@@ -12,6 +12,9 @@ import json
 import wandb
 
 experiment_name = "Final"
+group = "group1"
+job_type = "main"
+
 result_path = f"results/{experiment_name}"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
@@ -32,7 +35,7 @@ config = {
 }
 
 # Initialize Weights and Biases
-wandb.init(project="my-project", name="my-experiment", config=config)
+wandb.init(project="my-project", name=experiment_name, group=group, job_type=job_type, config=config)
 
 batch_size = wandb.config.batch_size
 block_size = wandb.config.block_size
