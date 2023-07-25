@@ -37,6 +37,3 @@ Use the following codes to plot the results.
 ```bash
 python plot_results.py
 ```
-
-## Credit
-This repo draws strong inspiration and borrows heavily from the implementation available at https://github.com/karpathy/nanoGPT.
