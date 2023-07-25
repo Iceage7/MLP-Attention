@@ -5,4 +5,3 @@ matplotlib
 tqdm
 jupyterlab
 seaborn
-wandb
