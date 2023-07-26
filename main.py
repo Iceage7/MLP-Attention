@@ -115,20 +115,21 @@ def estimate_loss_metrics(model):
             Y_probs = F.softmax(logits, dim=1)
             perplexity = torch.exp(loss)
             
-    
             # compute cer
             Y_hat = torch.argmax(logits, dim=1)
             Y_true = Y.view(-1)
             cer = editdistance.eval(decode(Y_hat.tolist()), decode(Y_true.tolist())) / len(Y_true)
             
             # compute f1 score
-            Y_pred = torch.argmax(Y_probs, dim=2)
-            f1_score = f1_score(Y_pred, Y, average='macro')
+            Y_hat = torch.argmax(logits, dim=-1).view(-1)
+            Y_true = Y.view(-1)
+            f1 = f1_score(Y_true.cpu(), Y_hat.cpu(), average='macro') 
+
             
             losses[k] = loss.item()
             perplexities[k] = perplexity
             cers[k] = cer
-            f1_scores[k] = f1_score
+            f1_scores[k] = f1
             
         out_loss[split] = losses.mean()
         out_preplexity[split] = perplexities.mean()
