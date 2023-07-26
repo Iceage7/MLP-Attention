@@ -11,6 +11,7 @@ import os
 import json
 import wandb
 from sklearn.metrics import f1_score
+import editdistance
 
 
 experiment_name = "Final"
@@ -93,11 +94,12 @@ def get_batch(split):
     return x, y
 
 
+
 @torch.no_grad()
 def estimate_loss_metrics(model):
     out_loss = {}
-    out_preplexity = {} 
-    out_cer = {}
+    out_preplexity = {}
+    out_cer = {} 
     out_f1 = {}
     model.eval()
     for split in ["train", "val"]:
@@ -113,27 +115,15 @@ def estimate_loss_metrics(model):
             Y_probs = F.softmax(logits, dim=1)
             perplexity = torch.exp(loss)
             
-
+    
             # compute cer
-            Y_pred = torch.argmax(logits, dim=1)
-            
-            # flatten prediction and target
-            Y_pred = Y_pred.view(-1)
-            Y = Y.view(-1)
-            
-            # get number of characters
-            num_chars = Y.shape[0]
-            
-            # get number of incorrect predictions
-            num_errors = torch.sum(Y_pred != Y).item()
-            
-            cer = num_errors / num_chars
+            Y_hat = torch.argmax(logits, dim=1)
+            Y_true = Y.view(-1)
+            cer = editdistance.eval(decode(Y_hat.tolist()), decode(Y_true.tolist())) / len(Y_true)
             
             # compute f1 score
-            Y_pred_labels = torch.argmax(logits, dim=1)
-            Y_true = Y.cpu().numpy()
-            Y_pred = Y_pred_labels.cpu().numpy()
-            f1 = f1_score(Y_true, Y_pred, average='macro')
+            Y_pred = torch.argmax(Y_probs, dim=2)
+            f1_score = f1_score(Y_pred, Y, average='macro')
             
             losses[k] = loss.item()
             perplexities[k] = perplexity
