@@ -96,7 +96,7 @@ def get_batch(split):
 @torch.no_grad()
 def estimate_loss_metrics(model):
     out_loss = {}
-    out_preplexity = {}
+    out_preplexity = {} 
     out_cer = {}
     out_f1 = {}
     model.eval()
@@ -108,18 +108,43 @@ def estimate_loss_metrics(model):
         for k in range(eval_iters):
             X, Y = get_batch(split)
             logits, loss = model(X, Y)
-            perplexity = np.exp(loss.item())
-            preds = torch.argmax(logits, dim=-1)
-            cer = torch.sum(preds != Y) / (len(X) * len(Y))
-            f1 = f1_score(Y.cpu().numpy().ravel(), preds.cpu().numpy().ravel(), average='micro')
+            
+            # compute preplexity
+            Y_probs = F.softmax(logits, dim=1)
+            perplexity = torch.exp(loss)
+            
+
+            # compute cer
+            Y_pred = torch.argmax(logits, dim=1)
+            
+            # flatten prediction and target
+            Y_pred = Y_pred.view(-1)
+            Y = Y.view(-1)
+            
+            # get number of characters
+            num_chars = Y.shape[0]
+            
+            # get number of incorrect predictions
+            num_errors = torch.sum(Y_pred != Y).item()
+            
+            cer = num_errors / num_chars
+            
+            # compute f1 score
+            Y_pred_labels = torch.argmax(logits, dim=1)
+            Y_true = Y.cpu().numpy()
+            Y_pred = Y_pred_labels.cpu().numpy()
+            f1 = f1_score(Y_true, Y_pred, average='macro')
+            
             losses[k] = loss.item()
             perplexities[k] = perplexity
             cers[k] = cer
             f1_scores[k] = f1_score
+            
         out_loss[split] = losses.mean()
         out_preplexity[split] = perplexities.mean()
         out_cer[split] = cers.mean()
-        out_f1[split] = f1_scores
+        out_f1[split] = f1_scores.mean()
+        
     model.train()
     return out_loss, out_preplexity, out_cer, out_f1
 
