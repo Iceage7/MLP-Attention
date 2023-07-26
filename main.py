@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 import json
 import wandb
+from sklearn.metrics import f1_score
+
 
 experiment_name = "Final"
 result_path = f"results/{experiment_name}"
@@ -72,15 +74,15 @@ def decode(l):
     )  # decoder: take a list of integers, output a string
 
 
+
+
 # Train and test splits
 data = torch.tensor(encode(text), dtype=torch.long)
-n = int(0.9 * len(data))  # first 90% will be train, rest val
+n = int(0.9 * len(data))  # first 90% will be train, rest val, test
 train_data = data[:n]
 val_data = data[n:]
 
 # data loading
-
-
 def get_batch(split):
     # generate a small batch of data of inputs x and targets y
     data = train_data if split == "train" else val_data
@@ -92,18 +94,36 @@ def get_batch(split):
 
 
 @torch.no_grad()
-def estimate_loss(model):
-    out = {}
+def estimate_loss_metrics(model):
+    out_loss = {}
+    out_preplexity = {}
+    out_cer = {}
+    out_f1 = {}
     model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
+        perplexities = torch.zeros(eval_iters)
+        cers = torch.zeros(eval_iters)
+        f1_scores = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             logits, loss = model(X, Y)
+            perplexity = np.exp(loss.item())
+            preds = torch.argmax(logits, dim=-1)
+            cer = torch.sum(preds != yb) / (len(xb) * len(yb))
+            f1 = f1_score(yb.cpu().numpy().ravel(), preds.cpu().numpy().ravel(), average='micro')
             losses[k] = loss.item()
-        out[split] = losses.mean()
+            perplexities[k] = perplexity
+            cers[k] = cer
+            f1_scores[k] = f1_score
+        out_loss[split] = losses.mean()
+        out_preplexity[split] = perplexities.mean()
+        out_cer[split] = cers.mean()
+        out_f1[split] = f1_scores
     model.train()
-    return out
+    return out_loss, out_preplexity, out_cer, out_f1
+
+
 
 
 class MLPHead(nn.Module):
@@ -283,6 +303,7 @@ class GPTLanguageModel(nn.Module):
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
         return idx
+    
 
 
 mlp_attention_model = GPTLanguageModel(mlp_attention=True)
@@ -307,29 +328,67 @@ mlp_attention_train_loss = []
 mlp_attention_val_loss = []
 x_val = []
 
+train_preplexity = []
+val_preplexity = []
+mlp_attention_train_preplexity = []
+mlp_attention_val_preplexity = []
+
+train_cer = []
+val_cer = []
+mlp_attention_train_cer = []
+mlp_attention_val_cer = []
+
+train_f1 = []
+val_f1 = []
+mlp_attention_train_f1 = []
+mlp_attention_val_f1 = []
+
+
 for iter in range(max_iters):
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0 or iter == max_iters - 1:
         x_val.append(iter)
-        losses = estimate_loss(model=model)
+        losses, preplexities, cers, f1_scores = estimate_loss_metrics(model=model)
         train_loss.append(losses["train"])
         val_loss.append(losses["val"])
+        train_preplexity.append(preplexities["train"])
+        val_preplexity.append(preplexities["val"])
+        train_cer.append(cers["train"])
+        val_cer.append(cers["val"])
+        train_f1.append(f1_scores["train"])
+        val_f1.append(f1_scores["val"])
+
         print(
             f"Original model: step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
-        losses = estimate_loss(model=mlp_attention_model)
+
+
+        losses, preplexities, cers, f1_scores = estimate_loss_metrics(model=mlp_attention_model)
         mlp_attention_train_loss.append(losses["train"])
         mlp_attention_val_loss.append(losses["val"])
+        mlp_attention_train_preplexity.append(preplexities["train"])
+        mlp_attention_val_preplexity.append(preplexities["val"])
+        mlp_attention_train_cer.append(cers["train"])
+        mlp_attention_val_cer.append(cers["val"])
+        mlp_attention_train_f1.append(f1_scores["train"])
+        mlp_attention_val_f1.append(f1_scores["val"])
+
+
         print(
             f"MLP Attention model: step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
 
-
         # Log trainig loss values 
-        wandb.log({"train": train_loss[-1], "mlp_train": mlp_attention_train_loss[-1]}, step=iter)  
+        wandb.log({"train_loss": train_loss[-1], "mlp_train_loss": mlp_attention_train_loss[-1]}, step=iter)  
+        wandb.log({"train_preplexity": train_preplexity[-1], "mlp_attention_train_preplexity": mlp_attention_train_preplexity[-1]}, step=iter)
+        wandb.log({"train_cer": train_cer[-1], "mlp_attention_train_cer": mlp_attention_train_cer[-1]}, step=iter)
+        wandb.log({"train_f1": train_f1[-1], "mlp_attention_train_f1": mlp_attention_train_f1[-1]}, step=iter)
 
         # Log validation losses
-        wandb.log({"val": val_loss[-1], "mlp_val": mlp_attention_val_loss[-1]}, step=iter)
+        wandb.log({"val_loss": val_loss[-1], "mlp_val_loss": mlp_attention_val_loss[-1]}, step=iter)  
+        wandb.log({"val_preplexity": val_preplexity[-1], "mlp_attention_val_preplexity": mlp_attention_val_preplexity[-1]}, step=iter)
+        wandb.log({"val_cer": val_cer[-1], "mlp_attention_val_cer": mlp_attention_val_cer[-1]}, step=iter)
+        wandb.log({"val_f1": val_f1[-1], "mlp_attention_val_f1": mlp_attention_val_f1[-1]}, step=iter)
 
     # sample a batch of data
     xb, yb = get_batch("train")
