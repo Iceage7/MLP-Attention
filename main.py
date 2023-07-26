@@ -110,8 +110,8 @@ def estimate_loss_metrics(model):
             logits, loss = model(X, Y)
             perplexity = np.exp(loss.item())
             preds = torch.argmax(logits, dim=-1)
-            cer = torch.sum(preds != yb) / (len(xb) * len(yb))
-            f1 = f1_score(yb.cpu().numpy().ravel(), preds.cpu().numpy().ravel(), average='micro')
+            cer = torch.sum(preds != Y) / (len(X) * len(Y))
+            f1 = f1_score(Y.cpu().numpy().ravel(), preds.cpu().numpy().ravel(), average='micro')
             losses[k] = loss.item()
             perplexities[k] = perplexity
             cers[k] = cer
